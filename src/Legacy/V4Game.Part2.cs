@@ -38,7 +38,23 @@ public partial class V4Game
 
     public async Task Begin()
     {
-        await DoBeginAsync();
+        // qvh: park-aware Begin -- see patch_questviva.py section 10.
+        _turnSuspendedTcs = new TaskCompletionSource();
+        _ = QvhBeginAsync();
+        await _turnSuspendedTcs.Task;
+    }
+
+    private async Task QvhBeginAsync()
+    {
+        try
+        {
+            await DoBeginAsync();
+        }
+        catch (Exception ex)
+        {
+            LogException(ex);
+            SignalTurnSuspended();
+        }
     }
 
     public List<string> Errors => new();
@@ -58,6 +74,10 @@ public partial class V4Game
     {
         return SendCommand(command, 0, null);
     }
+
+    // qvh: is the turn parked on an `enter`, waiting for a mid-turn input
+    // rather than for the next command? -- see patch_questviva.py section 14.
+    public bool QvhAwaitingEnter => _commandOverrideModeOn;
 
     public async Task SendCommand(string command, int elapsedTime, IDictionary<string, string> metadata)
     {
@@ -197,7 +217,7 @@ public partial class V4Game
         // Decrypt file
         for (int i = 1, loopTo = Strings.Len(fileData); i <= loopTo; i++)
         {
-            decryptedFile.Append(Strings.Chr(255 - Strings.Asc(Strings.Mid(fileData, i, 1))));
+            decryptedFile.Append(QvhChars.Chr(255 - QvhChars.Asc(Strings.Mid(fileData, i, 1))));
         }
 
         _fileData = decryptedFile.ToString();
@@ -762,6 +782,10 @@ public partial class V4Game
     {
         _numberObjs = 1;
         _objs = new ObjectType[2];
+        // qvh patch: VB6 slot 0 is a zeroed record, not null -- section 11.
+        _objs[0] = QvhZeroedRecord<ObjectType>();
+        _rooms = new RoomType[1];
+        _rooms[0] = QvhZeroedRecord<RoomType>();
         _objs[1] = new ObjectType();
         var o = _objs[1];
         o.ObjectName = "game";
@@ -5169,6 +5193,8 @@ public partial class V4Game
             }
 
             var parent = GetObjectProperty("parent", id, false, false);
+            // qvh patch: the dropped line that makes the block below live -- section 13.
+            if (!string.IsNullOrEmpty(parent)) isInContainer = true;
             parentID = GetObjectIdNoAlias(parent);
         }
 

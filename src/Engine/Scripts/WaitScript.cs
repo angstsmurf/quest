@@ -41,6 +41,8 @@ public class WaitScript : ScriptBase
     public override Task ExecuteAsync(Context c)
     {
         m_worldModel.PlayerUi.DoWait();
+        // qvh patch: this wait holds the turn open (section 6)
+        m_worldModel._waitParkedTurn = true;
         WorldModel.BeginPrompt(ref m_worldModel._waitTcs);
         m_worldModel.BeginPendingCallback();
         m_worldModel.SignalTurnSuspended();
@@ -61,6 +63,9 @@ public class WaitScript : ScriptBase
         finally
         {
             await m_worldModel.EndPendingCallbackAsync();
+            // qvh patch: run the FinishTurn this wait deferred (section 6)
+            m_worldModel._waitParkedTurn = false;
+            await m_worldModel.RunDeferredFinishTurnAsync();
             m_worldModel.SignalTurnSuspended();
         }
     }

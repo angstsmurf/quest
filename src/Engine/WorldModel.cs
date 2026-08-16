@@ -113,7 +113,9 @@ public partial class WorldModel : IGame, IGameDebug
     // happens constantly during ordinary turns) - a genuinely wedged session fails this many times
     // in short order regardless, while a normal session with the odd one-off script bug never gets
     // close.
-    private const int MaxScriptErrors = 20;
+    private static readonly int MaxScriptErrors =
+        int.TryParse(Environment.GetEnvironmentVariable("QVH_ERROR_LIMIT"), out var qvhLimit)
+            ? qvhLimit : 20; // qvh patch: legacy Quest had no breaker at all
     private int _scriptErrorCount;
     private bool _scriptErrorsFatal;
 
@@ -257,6 +259,7 @@ public partial class WorldModel : IGame, IGameDebug
         try
         {
             _timerRunner = new TimerRunner(this, !_loadedFromSaved);
+
             if (Version <= WorldModelVersion.v540)
             {
                 PlayerUi.Show("Panes");
@@ -371,14 +374,26 @@ public partial class WorldModel : IGame, IGameDebug
                     {"metadata", new QuestDictionary<string>(metadata)}
                 }), false);
 
-                if (Version < WorldModelVersion.v580)
+                if (Version < WorldModelVersion.v580 && _waitParkedTurn)
                 {
-                    await TryFinishTurnAsync();
+                    // qvh patch: a `wait` parked this turn; legacy Quest ran FinishTurn
+                    // after the callback, so defer it (see patch_questviva.py section 6).
+                    // Gated to pre-580 games — the same gate that decides whether
+                    // FinishTurn runs from here at all — so anything authored against
+                    // modern (v580 / QuestViva-era) turn semantics keeps the stock path.
+                    _finishTurnDeferred = true;
                 }
-
-                if (State != GameState.Finished)
+                else
                 {
-                    await UpdateListsAsync();
+                    if (Version < WorldModelVersion.v580)
+                    {
+                        await TryFinishTurnAsync();
+                    }
+
+                    if (State != GameState.Finished)
+                    {
+                        await UpdateListsAsync();
+                    }
                 }
             }
             else
@@ -1625,6 +1640,27 @@ public partial class WorldModel : IGame, IGameDebug
         finally
         {
             await EndPendingCallbackAsync();
+        }
+    }
+
+    // qvh patch: `_waitParkedTurn` is set while a `wait` holds the turn open
+    // (WaitScript sets it, its finally clears it); `_finishTurnDeferred` is the
+    // FinishTurn that wait pushed past its command turn. Gating on the wait
+    // itself rather than on _pendingCallbackCount matters: a menu / get input /
+    // `on ready` also raises that count, and deferring on those would strand the
+    // FinishTurn until some later, unrelated wait discharged it.
+    // (See patch_questviva.py section 6.)
+    internal bool _waitParkedTurn;
+    internal bool _finishTurnDeferred;
+
+    internal async Task RunDeferredFinishTurnAsync()
+    {
+        if (!_finishTurnDeferred) return;
+        _finishTurnDeferred = false;
+        await TryFinishTurnAsync();
+        if (State != GameState.Finished)
+        {
+            await UpdateListsAsync();
         }
     }
 

@@ -149,8 +149,17 @@ public partial class Template
 
         if (!m_worldModel.EditMode)
         {
-            template.Fields[FieldDefinitions.Function] =
-                new Expression<string>(expression, new ScriptContext(m_worldModel));
+            try
+            {
+                template.Fields[FieldDefinitions.Function] =
+                    new Expression<string>(expression, new ScriptContext(m_worldModel));
+            }
+            catch (Exception)
+            {
+                // qvh patch: legacy-Quest lazy dynamictemplate parse (see patch_questviva.py)
+                template.Fields[FieldDefinitions.Function] =
+                    new QuestViva.Engine.Functions.QvhLazyExpression(expression, new ScriptContext(m_worldModel));
+            }
         }
         else
         {

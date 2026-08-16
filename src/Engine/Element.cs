@@ -220,6 +220,11 @@ public class Element : IComparable
         Fields.Set(fieldName, value);
         if (!m_worldModel.EditMode)
         {
+            // qvh patch: v5 fired changed<field> from the guarded
+            // Fields.AttributeChanged event; the rewrite fires it here
+            // unconditionally, so same-value writes recurse (section 7).
+            var qvhChanged = value == null ? oldValue != null : !value.Equals(oldValue);
+            if (!qvhChanged) return;
             var changedScriptName = "changed" + fieldName;
             if (Fields.HasType<IScript>(changedScriptName))
             {

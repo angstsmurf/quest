@@ -15,7 +15,7 @@ public partial class V4Game : IGame, IGameDebug
     private readonly List<string> _log = new();
     private readonly int _numSkipCheckFiles;
     private readonly string[] _playerErrorMessageString = new string[39];
-    private readonly Random _random = new();
+    private readonly ErkyrathRandomV4 _random = ErkyrathRandomV4.FromEnv();
     private readonly Stream _saveData;
     private readonly string[] _skipCheckFile;
     private readonly TextFormatter _textFormatter = new();
@@ -1261,7 +1261,7 @@ public partial class V4Game : IGame, IGameDebug
         {
             if ((Strings.LCase(KWord) ?? "") == (Strings.LCase(_casKeywords[i]) ?? ""))
             {
-                return Conversions.ToString(Strings.Chr(i));
+                return Conversions.ToString(QvhChars.Chr(i));
             }
         }
 
@@ -1962,7 +1962,7 @@ public partial class V4Game : IGame, IGameDebug
                 if (textMode)
                 {
                     var textData = Strings.Mid(fileData, i,
-                        Strings.InStr(i, fileData, Conversions.ToString(Strings.Chr(253))) - (i - 1));
+                        Strings.InStr(i, fileData, Conversions.ToString(QvhChars.Chr(253))) - (i - 1));
                     textData = Strings.Left(textData, Strings.Len(textData) - 1);
                     var cpos = 1;
                     var finished = false;
@@ -1985,7 +1985,7 @@ public partial class V4Game : IGame, IGameDebug
                     }
 
                     textMode = false;
-                    i = Strings.InStr(i, fileData, Conversions.ToString(Strings.Chr(253)));
+                    i = Strings.InStr(i, fileData, Conversions.ToString(QvhChars.Chr(253)));
                 }
 
                 j = i;
@@ -2036,7 +2036,7 @@ public partial class V4Game : IGame, IGameDebug
                                 {
                                     j = j + 1;
                                     d = Strings.Mid(fileData, j, 1);
-                                    if (d != Conversions.ToString(Strings.Chr(254)))
+                                    if (d != Conversions.ToString(QvhChars.Chr(254)))
                                     {
                                         curLin += d;
                                     }
@@ -2077,7 +2077,7 @@ public partial class V4Game : IGame, IGameDebug
         for (int i = 1, loopTo = Strings.Len(s); i <= loopTo; i++)
         {
             var v = Encoding.GetEncoding(1252).GetBytes(Strings.Mid(s, i, 1))[0];
-            output = output + Strings.Chr(v ^ 255);
+            output = output + QvhChars.Chr(v ^ 255);
         }
 
         return output;
@@ -4378,8 +4378,8 @@ public partial class V4Game : IGame, IGameDebug
 
         _numberObjs = _numberObjs + 1;
         Array.Resize(ref _objs, _numberObjs + 1);
-        _objs[_numberObjs] = new ObjectType();
-        _objs[_numberObjs] = _objs[id];
+        // qvh patch: a VB6 record assignment copies -- section 12.
+        _objs[_numberObjs] = QvhCopyRecord(_objs[id]);
         _objs[_numberObjs].ContainerRoom = cloneTo;
         _objs[_numberObjs].ObjectName = newName;
 
@@ -4389,8 +4389,8 @@ public partial class V4Game : IGame, IGameDebug
 
             _numberRooms = _numberRooms + 1;
             Array.Resize(ref _rooms, _numberRooms + 1);
-            _rooms[_numberRooms] = new RoomType();
-            _rooms[_numberRooms] = _rooms[_objs[id].CorresRoomId];
+            // qvh patch: a VB6 record assignment copies -- section 12.
+            _rooms[_numberRooms] = QvhCopyRecord(_rooms[_objs[id].CorresRoomId]);
             _rooms[_numberRooms].RoomName = newName;
             _rooms[_numberRooms].ObjId = _numberObjs;
 
@@ -6612,7 +6612,7 @@ public partial class V4Game : IGame, IGameDebug
 
         for (int i = start, loopTo9 = Strings.Len(dataString); i <= loopTo9; i++)
         {
-            newFileData.Append(Strings.Chr(255 - Strings.Asc(Strings.Mid(dataString, i, 1))));
+            newFileData.Append(QvhChars.Chr(255 - QvhChars.Asc(Strings.Mid(dataString, i, 1))));
         }
 
         return newFileData.ToString();
@@ -6981,10 +6981,8 @@ public partial class V4Game : IGame, IGameDebug
         }
         else if (name == "rand")
         {
-            return Conversion.Str(
-                Conversion.Int(_random.NextDouble() *
-                               (Conversions.ToDouble(parameters[2]) - Conversions.ToDouble(parameters[1]) + 1d)) +
-                Conversions.ToDouble(parameters[1]));
+            return Conversion.Str(_random.Rand(
+                Conversions.ToDouble(parameters[1]), Conversions.ToDouble(parameters[2])));
         }
         else if (name == "instr")
         {

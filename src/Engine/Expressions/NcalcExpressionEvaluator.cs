@@ -301,6 +301,20 @@ public class NcalcExpressionEvaluator<T> : IExpressionEvaluator<T>, IDynamicExpr
             _ => null
         };
 
+        // qvh patch: FLEE's `in` checked dictionary KEYS; NCalc's In enumerates
+        // KeyValuePairs so `key in dict` was always false (see patch_questviva.py section 6)
+        if (args.BinaryExpression.Type is BinaryExpressionType.In or BinaryExpressionType.NotIn)
+        {
+            var inRight = await args.RightValueAsync();
+            if (inRight is System.Collections.IDictionary inDict)
+            {
+                var inLeft = await args.LeftValueAsync();
+                var contains = inLeft != null && inDict.Contains(inLeft);
+                args.Result = args.BinaryExpression.Type == BinaryExpressionType.In ? contains : !contains;
+            }
+            return;
+        }
+
         if (operatorName == null && !isEquality) return;
 
         var left = await args.LeftValueAsync();
