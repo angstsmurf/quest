@@ -17,6 +17,7 @@ public class NcalcExpressionEvaluator<T> : IExpressionEvaluator<T>, IDynamicExpr
     private readonly ScriptContext _scriptContext;
     private readonly Expression _nCalcExpression;
     private readonly ExpressionOwner _expressionOwner;
+    private ErkyrathRandom? _qvhRandom;   // qvh: this expression's own stream
     private readonly string _expression;
 
     public NcalcExpressionEvaluator(string expression, ScriptContext scriptContext)
@@ -117,7 +118,8 @@ public class NcalcExpressionEvaluator<T> : IExpressionEvaluator<T>, IDynamicExpr
     private async Task EvaluateFunctionAsync(string name, FunctionEventArgs args)
     {
         var tryExpressionOwner =
-            await EvaluateFunctionFromTypeAsync(typeof(ExpressionOwner), _expressionOwner, name, args.Parameters);
+            await EvaluateFunctionFromTypeAsync(typeof(ExpressionOwner), _expressionOwner, name, args.Parameters,
+                () => _expressionOwner.QvhUseRandom(_qvhRandom ??= ErkyrathRandom.FromEnv()));
         if (tryExpressionOwner.handled)
         {
             args.Result = tryExpressionOwner.result;
@@ -149,7 +151,7 @@ public class NcalcExpressionEvaluator<T> : IExpressionEvaluator<T>, IDynamicExpr
     }
 
     private static async Task<(bool handled, object? result)> EvaluateFunctionFromTypeAsync([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type type, object? instance,
-        string name, FunctionData parameters)
+        string name, FunctionData parameters, Action? qvhBeforeDispatch = null)
     {
         var methods = GetPublicMethodsByName(type, name);
         if (methods == null) return (false, null);
@@ -158,6 +160,7 @@ public class NcalcExpressionEvaluator<T> : IExpressionEvaluator<T>, IDynamicExpr
         for (var i = 0; i < parameters.Count; i++)
             evaluatedArgs[i] = CoerceLong(await parameters.EvaluateAsync(i));
 
+        qvhBeforeDispatch?.Invoke();
         var (handled, result) = DispatchToMethod(methods, instance, name, evaluatedArgs);
         if (handled && result is Task task)
         {

@@ -192,7 +192,9 @@ public partial class WorldModel : IGame, IGameDebug
     // happens constantly during ordinary turns) - a genuinely wedged session fails this many times
     // in short order regardless, while a normal session with the odd one-off script bug never gets
     // close.
-    private const int MaxScriptErrors = 20;
+    private static readonly int MaxScriptErrors =
+        int.TryParse(Environment.GetEnvironmentVariable("QVH_ERROR_LIMIT"), out var qvhLimit)
+            ? qvhLimit : 20; // qvh patch: legacy Quest had no breaker at all
     private int _scriptErrorCount;
     private bool _scriptErrorsFatal;
 
